@@ -1,0 +1,93 @@
+---
+title: "TidyTuesday - Sports"
+author: "Bryan Casanova"
+date: '2022-03-30'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Presentación
+
+El TidyTuesday de esta semana se relaciona a una base de datos de los gastos que realizan distintas universidades de Estados Unidos. Primero cargo y visualizo un poco los datos para saber qué datos tengo:
+
+```{r carga}
+library(tidyverse)
+sports <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2022/2022-03-29/sports.csv') %>% 
+  as_tibble()
+head(sports)
+```
+Se puede encontrar una pequeña descripción de cada campo en el [github de TidyTuesday](https://github.com/rfordatascience/tidytuesday/blob/master/data/2022/2022-03-29/readme.md) 
+
+
+## Primeras visualizaciones
+
+```{r gasto total por estado}
+sports %>% 
+  group_by(Estado = state_cd) %>% 
+  summarize(Gasto_promedio = mean(total_exp_menwomen, na.rm = T)) %>% 
+  arrange(desc(Gasto_promedio))
+```
+Ok, se ven números muy grandes pero la verdad no manejo los códigos de los estados, por lo que me gustaría ver un mapa y por ejemplo saber si hay un comportamiento espacial en este gasto promedio.
+
+```{r cargo mapa USA}
+library(usmap)
+
+us <- usmap::us_map()
+# us2 <-  left_join(us, sports %>% 
+#               group_by(Estado = state_cd) %>% 
+#               summarize(Gasto_promedio = mean(total_exp_menwomen, na.rm = T)), 
+#               by = c("abbr" ="Estado")) 
+
+gastoprom_est <- sports %>% 
+              group_by(Estado = state_cd) %>% 
+              summarize(Gasto_promedio = mean(total_exp_menwomen, na.rm = T)) %>% 
+                  left_join(us %>% select(abbr,full) %>% distinct(), 
+                      by = c("Estado" ="abbr")) 
+
+state <- map_data("state") %>% left_join(gastoprom_est %>%  select(-Estado) %>% mutate(full=tolower(full)), by = c("region" ="full"))
+ggplot(data=state, aes(x=long, y=lat, fill=Gasto_promedio, group=group)) + 
+  geom_polygon(color = "white") + 
+  theme(axis.title.x=element_blank(), axis.text.x=element_blank(), axis.ticks.x=element_blank(),
+        axis.title.y=element_blank(), axis.text.y=element_blank(), axis.ticks.y=element_blank(),
+        legend.position = "right") + 
+  labs(title = 'Gasto promedio por estado', fill = "Gasto USD") + 
+  coord_fixed(1.3) +
+  theme(panel.background=element_blank())
+```
+
+## Existen diferencias entre la inversión entre deportistas hombres y mujeres?
+
+```{r diferencias inversion hombre mujer}
+difprom_sexo <- sports %>% 
+              select(state_cd, exp_men,exp_women) %>% 
+              na.omit() %>% 
+              mutate(Dif = exp_men - exp_women) %>% 
+              group_by(Estado = state_cd) %>%
+              summarize(Dif_promedio = mean(Dif, na.rm = T)) %>% 
+                  left_join(us %>% select(abbr,full) %>% distinct(), 
+                      by = c("Estado" ="abbr")) 
+
+
+state <- map_data("state") %>% left_join(difprom_sexo %>%  select(-Estado) %>% mutate(full=tolower(full)), by = c("region" ="full"))
+ggplot(data=state, aes(x=long, y=lat, fill=Dif_promedio, group=group)) + 
+  geom_polygon(color = "white") + 
+  theme(axis.title.x=element_blank(), axis.text.x=element_blank(), axis.ticks.x=element_blank(),
+        axis.title.y=element_blank(), axis.text.y=element_blank(), axis.ticks.y=element_blank(),
+        legend.position = "right") + 
+  labs(title = 'Diferencia promedio por estado', fill = "Gasto USD") + 
+  coord_fixed(1.3) +
+  theme(panel.background=element_blank())
+
+```
+Se observa que a nivel estatal, en todos ellos ocurre que la inversión en deportistas hombres es mayor a la inversión en deportistas mujeres, llegando a diferencias de 400000 USD promedio anual.
+Por otra parte, se observa una correlación entre los dos gráficos visualizados, es decir, a medida de que en un estado se invierte más en el deporte universitario, se corresponde con una mayor diferencia entre la inversión realizada en hombres en comparación a mujeres. 
+
+## Pendiente
+Realizar evaluación de correlación
+Pasar a gráficos dinámicos
+Evaluar algo a nivel de universidad
+Evaluar los ingresos
+Evaluar gasto estado/universidad en deportes según número de alumnos, sacar un worst 10
